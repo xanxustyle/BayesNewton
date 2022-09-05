@@ -1,7 +1,7 @@
 import objax
 import jax.numpy as np
 from jax import vmap
-from jax.ops import index_update, index
+from jax.numpy import index_exp as index
 from .utils import (
     diag,
     transpose,
@@ -929,9 +929,9 @@ class QuasiNewton(QuasiNewtonBase, Newton):
         )
 
         if self.mean_prev.value.shape[0] != mean_f.shape[0]:
-            B = index_update(self.hessian_approx.value, index[ind], B)
-            jacobian = index_update(self.jacobian_prev.value, index[ind], jacobian)
-            mean_f = index_update(self.mean_prev.value, index[ind], mean_f)
+            B = self.hessian_approx.value.at[index[ind]].set(B)
+            jacobian = self.jacobian_prev.value.at[index[ind]].set(jacobian)
+            mean_f = self.mean_prev.value.at[index[ind]].set(mean_f)
 
         return mean_f, jacobian, B, (mean_f, jacobian, B)
 
@@ -977,9 +977,9 @@ class VariationalQuasiNewton(QuasiNewtonBase, VariationalInference):
         )
 
         if self.mean_prev.value.shape[0] != mean_f.shape[0]:
-            B = index_update(self.hessian_approx.value, index[ind], B)
-            jacobian = index_update(self.jacobian_prev.value, index[ind], jacobian)
-            mean_f = index_update(self.mean_prev.value, index[ind], mean_f)
+            B = self.hessian_approx.value.at[index[ind]].set(B)
+            jacobian = self.jacobian_prev.value.at[index[ind]].set(jacobian)
+            mean_f = self.mean_prev.value.at[index[ind]].set(mean_f)
 
         return mean_f, jacobian, B[:, :self.func_dim, :self.func_dim], (mean_var, jacobian_mean_var, B)
 
@@ -1032,9 +1032,9 @@ class ExpectationPropagationQuasiNewton(QuasiNewtonBase, ExpectationPropagation)
         hessian = scale_factor @ B[:, :self.func_dim, :self.func_dim]
 
         if self.mean_prev.value.shape[0] != cav_mean_f.shape[0]:
-            B = index_update(self.hessian_approx.value, index[ind], B)
-            jacobian = index_update(self.jacobian_prev.value, index[ind], jacobian)
-            cav_mean_f = index_update(self.mean_prev.value, index[ind], cav_mean_f)
+            B = self.hessian_approx.value.at[index[ind]].set(B)
+            jacobian = self.jacobian_prev.value.at[index[ind]].set(jacobian)
+            cav_mean_f = self.mean_prev.value.at[index[ind]].set(cav_mean_f)
 
         return cav_mean_f, jacobian, hessian, (cavity_mean_var, jacobian_unscaled_mean_var, B)
 
@@ -1099,9 +1099,9 @@ class PosteriorLinearisationQuasiNewton(QuasiNewtonBase, PosteriorLinearisation)
         )
 
         if self.mean_prev.value.shape[0] != mean_f.shape[0]:
-            B = index_update(self.hessian_approx.value, index[ind], B)
-            jacobian = index_update(self.jacobian_prev.value, index[ind], jacobian)
-            mean_f = index_update(self.mean_prev.value, index[ind], mean_f)
+            B = self.hessian_approx.value.at[index[ind]].set(B)
+            jacobian = self.jacobian_prev.value.at[index[ind]].set(jacobian)
+            mean_f = self.mean_prev.value.at[index[ind]].set(mean_f)
 
         return mean_f, jacobian, B[:, :self.func_dim, :self.func_dim], (mean_var, jacobian_mean_var, B)
 
@@ -1144,8 +1144,8 @@ class PosteriorLinearisation2ndOrderQuasiNewton(QuasiNewtonBase, PosteriorLinear
         )
 
         if self.mean_prev.value.shape[0] != mean_f.shape[0]:
-            B = index_update(self.hessian_approx.value, index[ind], B)
-            jacobian = index_update(self.jacobian_prev.value, index[ind], jacobian)
-            mean_f = index_update(self.mean_prev.value, index[ind], mean_f)
+            B = self.hessian_approx.value.at[index[ind]].set(B)
+            jacobian = self.jacobian_prev.value.at[index[ind]].set(jacobian)
+            mean_f = self.mean_prev.value.at[index[ind]].set(mean_f)
 
         return mean_f, jacobian, B[:, :self.func_dim, :self.func_dim], (mean_var, jacobian_mean_var, B)

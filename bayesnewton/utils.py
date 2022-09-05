@@ -1,7 +1,7 @@
 import jax.numpy as np
 import numpy as nnp
 from jax import vmap
-from jax.ops import index_add, index, index_update
+from jax.numpy import index_exp as index
 from jax.scipy.linalg import cholesky, cho_factor, cho_solve
 from jax.scipy.special import gammaln
 from jax.lax import scan
@@ -222,16 +222,16 @@ def compute_conditional_statistics(x_test, x, kernel, ind):
 def sum_natural_params_by_group(carry, inputs):
     ind_m, nat1_m, nat2_m = inputs
     nat1s, nat2s, count = carry
-    nat1s = index_add(nat1s, index[ind_m], nat1_m)
-    nat2s = index_add(nat2s, index[ind_m], nat2_m)
-    count = index_add(count, index[ind_m], 1.0)
+    nat1s[index[ind_m]] += nat1_m
+    nat2s[index[ind_m]] += nat2_m
+    count[index[ind_m]] += 1.0
     return (nat1s, nat2s, count), 0.
 
 
 def count_indices(carry, inputs):
     ind_m = inputs
     count = carry
-    count = index_add(count, index[ind_m], 1.0)
+    count[index[ind_m]] += 1.0
     return count, 0.
 
 
@@ -666,16 +666,16 @@ def balance(F: np.ndarray,
             F, d, i = carry
 
             tmp = F[:, i]
-            tmp = index_update(tmp, index[i], 0.)
+            tmp[index[i]] = 0.
             c = np.linalg.norm(tmp, 2)
             tmp2 = F[i, :]
-            tmp2 = index_update(tmp2, index[i], 0.)
+            tmp2[index[i]] = 0.
 
             r = np.linalg.norm(tmp2, 2)
             f = np.sqrt(r / c)
-            d = index_update(d, index[i], d[i] * f)
-            F = index_update(F, index[:, i], F[:, i] * f)
-            F = index_update(F, index[i, :], F[i, :] / f)
+            d[index[i]] = d[i] * f
+            F[index[:, i]] = F[:, i] * f
+            F[index[i, :]] = F[i, :] / f
 
             return (F, d, i+1), d
 

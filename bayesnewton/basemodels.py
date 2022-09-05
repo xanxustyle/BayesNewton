@@ -4,7 +4,7 @@ from .likelihoods import Gaussian, MultiLatentLikelihood
 from .kernels import Independent, Separable
 from jax import vmap
 from jax.lax import scan
-from jax.ops import index, index_update
+from jax.numpy import index_exp as index
 from jax.scipy.linalg import cholesky, cho_factor, cho_solve
 from jax.lib import xla_bridge
 from .utils import (
@@ -192,8 +192,8 @@ class BaseModel(objax.Module):
 
     def group_natural_params(self, nat1, nat2, batch_ind=None):
         if (batch_ind is not None) and (batch_ind.shape[0] != self.num_data):
-            nat1 = index_update(self.pseudo_likelihood.nat1, index[batch_ind], nat1)
-            nat2 = index_update(self.pseudo_likelihood.nat2, index[batch_ind], nat2)
+            nat1 = self.pseudo_likelihood.nat1.at[index[batch_ind]].set(nat1)
+            nat2 = self.pseudo_likelihood.nat2.at[index[batch_ind]].set(nat2)
         return nat1, nat2
 
     def conditional_posterior_to_data(self, batch_ind=None, post_mean=None, post_cov=None):
@@ -748,7 +748,7 @@ class MarkovGaussianProcess(BaseModel):
         H = self.kernel.measurement_model()
         if self.spatio_temporal:
             # TODO: if R is fixed, only compute B, C once
-            B, C = self.kernel.spatial_conditional(X, R, predict=True)
+            B, C = self.kernel.spatial_conditional(X, R)
             W = B @ H
             test_mean = W @ state_mean
             test_var = W @ state_cov @ transpose(W) + C
@@ -787,8 +787,7 @@ class MarkovGaussianProcess(BaseModel):
         if X is None:
             dt = self.dt
         else:
-            x_time = X if X.ndim < 2 else X[:, 0]
-            dt = np.concatenate([np.array([0.0]), np.diff(np.sort(x_time))])
+            dt = np.concatenate([np.array([0.0]), np.diff(np.sort(X))])
         sd = self.state_dim
         H = self.kernel.measurement_model()
         Pinf = self.kernel.stationary_covariance()
@@ -824,9 +823,8 @@ class MarkovGaussianProcess(BaseModel):
 
         return f_samples
 
-    def posterior_sample(self, X=None, R=None, num_samps=1, seed=0):
+    def posterior_sample(self, X=None, num_samps=1, seed=0):
         """
-        TODO: currently doesn't work for R != R_train
         Sample from the posterior at the test locations.
         Posterior sampling works by smoothing samples from the prior using the approximate Gaussian likelihood
         model given by the pseudo-likelihood, 𝓝(f|μ*,σ²*), computed during training.
@@ -843,36 +841,30 @@ class MarkovGaussianProcess(BaseModel):
             the posterior samples [N_test, num_samps]
         """
         if X is None:
-            x_time = None
             train_ind = np.arange(self.num_data)
             test_ind = train_ind
         else:
             if X.ndim < 2:
                 X = X[:, None]
-            x_time = np.concatenate([self.X[:, 0], X[:, 0]])
-            x_time, ind = np.unique(x_time, return_inverse=True)
+            X = np.concatenate([self.X, X])
+            X, ind = np.unique(X, return_inverse=True)
             train_ind, test_ind = ind[:self.num_data], ind[self.num_data:]
-        post_mean, _ = self.predict(X, R)
-        prior_samp = self.prior_sample(X=x_time, num_samps=num_samps, seed=seed)  # sample at all locations
+        post_mean, _ = self.predict(X)
+        prior_samp = self.prior_sample(X=X, num_samps=num_samps, seed=seed)  # sample at training locations
         lik_chol = np.tile(cholesky(self.pseudo_likelihood.covariance, lower=True), [num_samps, 1, 1, 1])
         gen = objax.random.Generator(seed)
         prior_samp_train = prior_samp[:, train_ind]
         prior_samp_y = prior_samp_train + lik_chol @ objax.random.normal(shape=prior_samp_train.shape, generator=gen)
 
         def smooth_prior_sample(i, prior_samp_y_i):
-            smoothed_sample, _ = self.predict(X, R, pseudo_lik_params=(prior_samp_y_i, self.pseudo_likelihood.covariance))
+            smoothed_sample, _ = self.predict(X, pseudo_lik_params=(prior_samp_y_i, self.pseudo_likelihood.covariance))
             return i+1, smoothed_sample
 
         _, smoothed_samples = scan(f=smooth_prior_sample,
                                    init=0,
                                    xs=prior_samp_y)
 
-        if self.spatio_temporal:
-            prior_samp_test = prior_samp[:, test_ind][..., 0]
-        else:
-            prior_samp_test = prior_samp[:, test_ind][..., 0, 0]
-        # TODO: if R != R_train, then prior_samp_test is at the wrong locations and this breaks. Fix.
-        return prior_samp_test - smoothed_samples + post_mean[None]
+        return (prior_samp[..., 0, 0] - smoothed_samples + post_mean[None])[:, test_ind]
 
 
 MarkovGP = MarkovGaussianProcess
@@ -905,7 +897,8 @@ class SparseMarkovGaussianProcess(MarkovGaussianProcess):
         # nat2 = 1e-8 * eyes
 
         # initialise to match MarkovGP / GP on first step (when Z=X):
-        nat2 = index_update(1e-8 * eyes, index[:-1, self.state_dim, self.state_dim], 1e-2)
+        eyes_tmp = 1e-8 * eyes
+        nat2 = eyes_tmp.at[index[:-1, self.state_dim, self.state_dim]].set(1e-2)
 
         # initialise to match old implementation:
         # nat2 = (1 / 99) * eyes
@@ -1013,7 +1006,7 @@ class SparseMarkovGaussianProcess(MarkovGaussianProcess):
         H = self.kernel.measurement_model()
         if self.spatio_temporal:
             # TODO: if R is fixed, only compute B, C once
-            B, C = self.kernel.spatial_conditional(X, R, predict=True)
+            B, C = self.kernel.spatial_conditional(X, R)
             W = B @ H
             test_mean = W @ state_mean
             test_var = W @ state_cov @ transpose(W) + C
@@ -1021,8 +1014,7 @@ class SparseMarkovGaussianProcess(MarkovGaussianProcess):
             test_mean, test_var = H @ state_mean, H @ state_cov @ transpose(H)
 
         if np.squeeze(test_var).ndim > 2:  # deal with spatio-temporal case (discard spatial covariance)
-            if not isinstance(self.likelihood, MultiLatentLikelihood):
-                test_var = diag(np.squeeze(test_var))
+            test_var = diag(np.squeeze(test_var))
         return np.squeeze(test_mean), np.squeeze(test_var)
 
     def conditional_posterior_to_data(self, batch_ind=None, post_mean=None, post_cov=None):
@@ -1170,7 +1162,7 @@ class MarkovMeanFieldGaussianProcess(MarkovGaussianProcess):
         H = self.kernel.measurement_model()
         if self.spatio_temporal:
             # TODO: if R is fixed, only compute B, C once
-            B, C = self.kernel.spatial_conditional(X, R, predict=True)
+            B, C = self.kernel.spatial_conditional(X, R)
             W = B @ H
             test_mean = W @ state_mean
             test_var = W @ state_cov @ transpose(W) + C
