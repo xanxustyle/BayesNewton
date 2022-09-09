@@ -238,12 +238,12 @@ def parallel_filtering_operator(elem1, elem2):
 
 
 def make_associative_filtering_elements(As, Qs, H, ys, noise_covs, m0, P0):
-    Qs[index[0]] = P0  # first element requires different initialisation
+    Qs = Qs.at[index[0]].set(P0)  # first element requires different initialisation
     AA, b, C, J, eta = parallel_filtering_element(As, Qs, H, noise_covs, ys)
     # modify initial b to account for m0 (not needed if m0=zeros)
     S = H @ Qs[0] @ H.T + noise_covs[0]
     K0 = solve(S, H @ Qs[0]).T
-    b[index[0]] += m0 - K0 @ H @ m0
+    b = b.at[index[0]].add(m0 - K0 @ H @ m0)
     return AA, b, C, J, eta
 
 
