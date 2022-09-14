@@ -555,14 +555,14 @@ def make_associative_filtering_elements_mf(As, Qs, H, ys, noise_covs, m0, P0, bl
     state_dim = num_latents * sub_state_dim
     Pzeros = np.zeros([state_dim, state_dim])
 
-    Qs[index[0]] = P0  # first element requires different initialisation
+    Qs = Qs.at[index[0]].set(P0)  # first element requires different initialisation
     AA, b, C, J, eta = parallel_filtering_element_mf(As, Qs, H, noise_covs, ys, block_index)
     # modify initial b to account for m0 (not needed if m0=zeros)
     m0 = m0.reshape(-1, 1)
     Qs0 = build_block_diag(Qs[0])
     S = H @ Qs0 @ H.T + noise_covs[0]
     K0 = solve(S, H @ Qs0).T
-    b[index[0]] += get_block_mean(m0 - K0 @ (H @ m0))
+    b = b.at[index[0]].add(get_block_mean(m0 - K0 @ (H @ m0)))
     return AA, b, C, J, eta
 
 
@@ -667,7 +667,7 @@ def _parallel_rts_mf(fms, fPs, As, Qs, H, return_full, block_index):
 
     @vmap
     def build_block_diag(P_blocks):
-        P = Pzeros.at[index[block_index]].add(_blocks.flatten())
+        P = Pzeros.at[index[block_index]].add(P_blocks.flatten())
         return P
 
     def build_mean(m):
