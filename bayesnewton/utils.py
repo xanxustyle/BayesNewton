@@ -222,16 +222,16 @@ def compute_conditional_statistics(x_test, x, kernel, ind):
 def sum_natural_params_by_group(carry, inputs):
     ind_m, nat1_m, nat2_m = inputs
     nat1s, nat2s, count = carry
-    nat1s[index[ind_m]] += nat1_m
-    nat2s[index[ind_m]] += nat2_m
-    count[index[ind_m]] += 1.0
+    nat1s = nat1s.at[index[ind_m]].add(nat1_m)
+    nat2s = nat2s.at[index[ind_m]].add(nat2_m)
+    count = count.at[index[ind_m]].add(1.0)
     return (nat1s, nat2s, count), 0.
 
 
 def count_indices(carry, inputs):
     ind_m = inputs
     count = carry
-    count[index[ind_m]] += 1.0
+    count = count.at[index[ind_m]].add(1.0)
     return count, 0.
 
 
