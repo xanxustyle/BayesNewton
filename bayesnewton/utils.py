@@ -260,7 +260,7 @@ def input_admin(t, y, r):
             r = nnp.nan * t  # np.empty((1,) + x.shape[1:]) * np.nan
     if r.ndim < 2:
         r = nnp.expand_dims(r, 1)  # make 2-D
-    ind = nnp.argsort(t[:, 0], axis=0)
+    ind = nnp.argsort(t[:, 0], axis=0, kind='stable')
     t_train = t[ind, ...]
     y_train = y[ind, ...]
     r_train = r[ind, ...]
