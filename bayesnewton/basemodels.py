@@ -895,7 +895,8 @@ class SparseMarkovGaussianProcess(MarkovGaussianProcess):
         if Z.ndim < 2:
             Z = Z[:, None]
         Z = np.sort(Z, axis=0)
-        inf = np.array([[1e10]])
+        # inf = np.array([[1e10]])
+        inf = np.ones((1, Z.shape[1])) * 1e10
         self.Z = objax.StateVar(np.concatenate([-inf, Z, inf], axis=0))
         self.dz = np.array(np.diff(self.Z.value[:, 0]))
         self.num_transitions = self.dz.shape[0]
